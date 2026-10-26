@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS Memory Cards – เกมจับคู่การ์ดวิทยาการคำนวณ (ป.1)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Thai Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Kanit', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 40%, #fae8ff 100%);
+            min-height: 100vh;
+        }
+
+        /* 3D Card Flip Styling */
+        .card-container {
+            perspective: 1000px;
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+            cursor: pointer;
+        }
+
+        .card-container.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-container.matched .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            border-radius: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .card-front {
+            background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+            border: 4px solid #ffffff;
+        }
+
+        .card-back {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 4px solid #38bdf8;
+            transform: rotateY(180deg);
+        }
+
+        /* Matched Card Effect */
+        .card-container.matched .card-back {
+            border-color: #10b981;
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            animation: pulse-success 0.6s ease-in-out;
+        }
+
+        @keyframes pulse-success {
+            0%, 100% { transform: rotateY(180deg) scale(1); }
+            50% { transform: rotateY(180deg) scale(1.08); }
+        }
+
+        /* Button hover bounce */
+        .btn-bounce {
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .btn-bounce:hover {
+            transform: translateY(-2px) scale(1.02);
+        }
+
+        .btn-bounce:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        /* Confetti particle canvas overlay */
+        #confettiCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 60;
+        }
+    </style>
+</head>
+<body class="flex flex-col justify-between items-center min-h-screen p-3 sm:p-6 text-slate-800">
+
+    <!-- Canvas for Victory Confetti -->
+    <canvas id="confettiCanvas"></canvas>
+
+    <!-- Header & Dashboard Stats -->
+    <header class="w-full max-w-4xl flex flex-col md:flex-row justify-between items-center bg-white/90 backdrop-blur-md p-4 rounded-3xl shadow-xl border-4 border-sky-300 gap-3 mb-4">
+        <div class="flex items-center gap-3">
+            <span class="text-4xl sm:text-5xl animate-bounce">🤖</span>
+            <div>
+                <h1 class="text-xl sm:text-2xl font-extrabold text-sky-600 tracking-wide flex items-center gap-2">
+                    CS Memory Cards <span class="text-xs bg-sky-500 text-white px-2 py-0.5 rounded-full font-normal">ป.1</span>
+                </h1>
+                <p class="text-xs text-slate-500 font-semibold">จับคู่คำศัพท์พื้นฐานวิทยาการคำนวณ</p>
+            </div>
+        </div>
+
+        <!-- Level Controls & Stats Bar -->
+        <div class="flex flex-wrap items-center justify-center gap-3 sm:gap-4 bg-sky-50 px-4 py-2.5 rounded-2xl border-2 border-sky-200 w-full md:w-auto">
+            <div class="text-center px-1">
+                <span class="text-[11px] text-slate-500 font-bold block">ระดับความยาก</span>
+                <select id="levelSelect" onchange="changeLevel(this.value)" class="bg-white border border-sky-300 text-sky-800 text-xs sm:text-sm font-bold rounded-xl px-2 py-1 outline-none cursor-pointer">
+                    <option value="1">ง่าย (4 คู่ / 8 ใบ)</option>
+                    <option value="2" selected>ปานกลาง (6 คู่ / 12 ใบ)</option>
+                    <option value="3">ท้าทาย (8 คู่ / 16 ใบ)</option>
+                </select>
+            </div>
+            <div class="h-8 w-0.5 bg-sky-200"></div>
+            <div class="text-center">
+                <span class="text-[11px] text-slate-500 font-bold block">คู่ที่พบ</span>
+                <span id="pairsDisplay" class="text-base sm:text-lg font-extrabold text-emerald-600">0/6</span>
+            </div>
+            <div class="h-8 w-0.5 bg-sky-200"></div>
+            <div class="text-center">
+                <span class="text-[11px] text-slate-500 font-bold block">เปิดการ์ด</span>
+                <span id="flipsDisplay" class="text-base sm:text-lg font-extrabold text-amber-600">0</span>
+            </div>
+            <div class="h-8 w-0.5 bg-sky-200"></div>
+            <div class="text-center">
+                <span class="text-[11px] text-slate-500 font-bold block">เวลา</span>
+                <span id="timerDisplay" class="text-base sm:text-lg font-extrabold text-indigo-600">00:00</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Game Cards Container -->
+    <main class="w-full max-w-4xl flex-1 flex flex-col justify-center items-center my-auto">
+        <div id="cardGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 w-full p-2">
+            <!-- Cards dynamically rendered here -->
+        </div>
+    </main>
+
+    <!-- Bottom Action Controls -->
+    <div class="w-full max-w-4xl flex justify-center gap-3 mt-4 mb-2">
+        <button onclick="restartGame()" class="btn-bounce bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-2xl shadow-lg border-b-4 border-emerald-700 flex items-center gap-2 text-sm sm:text-base">
+            <span>🔄</span> เริ่มเกมใหม่
+        </button>
+    </div>
+
+    <!-- Victory Celebration Modal -->
+    <div id="victoryModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl border-4 border-sky-400 transform transition-all scale-100">
+            <div class="text-6xl mb-2 animate-bounce">🎉</div>
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-sky-600 mb-1">ยินดีด้วย! คุณชนะแล้ว</h2>
+            <p class="text-slate-500 font-bold text-xs sm:text-sm mb-4">เก่งมาก! จับคู่คำศัพท์วิทยาการคำนวณครบทุกคู่</p>
+
+            <div id="starRating" class="text-4xl mb-4 tracking-widest">⭐⭐⭐</div>
+
+            <div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-4 mb-6 text-left space-y-2">
+                <div class="flex justify-between items-center text-slate-700 font-semibold text-sm">
+                    <span>ระดับความยาก:</span>
+                    <span id="finalLevel" class="font-bold text-sky-700">ปานกลาง</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-700 font-semibold text-sm">
+                    <span>จำนวนเปิดการ์ด:</span>
+                    <span id="finalFlips" class="font-bold text-amber-600">0 ครั้ง</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-700 font-semibold text-sm">
+                    <span>เวลาที่ใช้:</span>
+                    <span id="finalTime" class="font-bold text-indigo-600">00:00</span>
+                </div>
+            </div>
+
+            <div class="flex gap-2">
+                <button onclick="closeVictoryModal(); restartGame();" class="btn-bounce flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold py-3 rounded-2xl border-b-4 border-emerald-700">
+                    🔄 เล่นอีกครั้ง
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center text-xs text-slate-500 font-medium py-2">
+        สื่อการเรียนรู้วิทยาการคำนวณ ระดับชั้น ป.1 • CS Memory Game
+    </footer>
+
+    <!-- Game Logic Script -->
+    <script>
+        // 🎴 Grade 1 CS Vocabulary Dataset
+        const CS_VOCABULARY = [
+            { id: 'forward', name: 'เดินหน้า', icon: '⬆️' },
+            { id: 'left', name: 'เลี้ยวซ้าย', icon: '⬅️' },
+            { id: 'right', name: 'เลี้ยวขวา', icon: '➡️' },
+            { id: 'bug', name: 'บั๊ก (ข้อผิดพลาด)', icon: '🐞' },
+            { id: 'robot', name: 'หุ่นยนต์', icon: '🤖' },
+            { id: 'category', name: 'จัดหมวดหมู่', icon: '🧺' },
+            { id: 'pixel', name: 'พิกเซล', icon: '🎨' },
+            { id: 'goal', name: 'จุดหมาย', icon: '🚩' }
+        ];
+
+        // 🔊 Web Audio API Sound Synthesizer
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type) {
+            try {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+
+                if (type === 'flip') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'match') {
+                    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+                    notes.forEach((freq, i) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.connect(g);
+                        g.connect(audioCtx.destination);
+                        o.type = 'triangle';
+                        o.frequency.setValueAtTime(freq, now + (i * 0.08));
+                        g.gain.setValueAtTime(0.15, now + (i * 0.08));
+                        g.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.08) + 0.2);
+                        o.start(now + (i * 0.08));
+                        o.stop(now + (i * 0.08) + 0.2);
+                    });
+                } else if (type === 'mismatch') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(240, now);
+                    osc.frequency.setValueAtTime(180, now + 0.12);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'victory') {
+                    const winNotes = [440, 554.37, 659.25, 880];
+                    winNotes.forEach((freq, i) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.connect(g);
+                        g.connect(audioCtx.destination);
+                        o.type = 'sine';
+                        o.frequency.setValueAtTime(freq, now + (i * 0.12));
+                        g.gain.setValueAtTime(0.2, now + (i * 0.12));
+                        g.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.12) + 0.35);
+                        o.start(now + (i * 0.12));
+                        o.stop(now + (i * 0.12) + 0.35);
+                    });
+                }
+            } catch (e) {
+                // Audio autoplay policy fallback
+            }
+        }
+
+        // Global Game State
+        let currentLevel = 2; // Default Medium (6 pairs)
+        let totalPairs = 6;
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let flipCount = 0;
+        let timerSeconds = 0;
+        let timerInterval = null;
+        let isProcessing = false;
+
+        // Initialize Game on Window Load
+        window.onload = () => {
+            initGame();
+        };
+
+        function changeLevel(val) {
+            currentLevel = parseInt(val, 10);
+            restartGame();
+        }
+
+        function restartGame() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            timerSeconds = 0;
+            flipCount = 0;
+            matchedPairs = 0;
+            flippedCards = [];
+            isProcessing = false;
+            
+            document.getElementById('timerDisplay').innerText = "00:00";
+            document.getElementById('flipsDisplay').innerText = "0";
+
+            initGame();
+        }
+
+        function initGame() {
+            // Set Pair counts based on difficulty
+            if (currentLevel === 1) totalPairs = 4;      // Easy
+            else if (currentLevel === 2) totalPairs = 6; // Medium
+            else if (currentLevel === 3) totalPairs = 8; // Hard
+
+            document.getElementById('pairsDisplay').innerText = `0/${totalPairs}`;
+
+            // Select Subset of Vocabularies
+            const selectedVocabs = CS_VOCABULARY.slice(0, totalPairs);
+
+            // Duplicate into Pairs
+            const cardDeck = [];
+            selectedVocabs.forEach((item, index) => {
+                cardDeck.push({ ...item, instanceId: `${item.id}-a` });
+                cardDeck.push({ ...item, instanceId: `${item.id}-b` });
+            });
+
+            // Shuffle Deck
+            cards = shuffle(cardDeck);
+
+            // Render Card Grid
+            renderCards();
+        }
+
+        function shuffle(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function renderCards() {
+            const grid = document.getElementById('cardGrid');
+            grid.innerHTML = '';
+
+            // Grid Layout adjustments based on count
+            if (totalPairs === 4) {
+                grid.className = "grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 w-full max-w-2xl";
+            } else if (totalPairs === 6) {
+                grid.className = "grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4 w-full max-w-3xl";
+            } else {
+                grid.className = "grid grid-cols-4 sm:grid-cols-4 gap-2.5 sm:gap-4 w-full max-w-4xl";
+            }
+
+            cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = "card-container h-32 sm:h-40 w-full";
+                cardEl.id = `card-${index}`;
+                cardEl.onclick = () => handleCardClick(index);
+
+                cardEl.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-front">
+                            <span class="text-3xl sm:text-4xl">❓</span>
+                            <span class="text-[10px] sm:text-xs font-bold text-sky-100 mt-1">CS CARD</span>
+                        </div>
+                        <div class="card-back">
+                            <span class="text-3xl sm:text-4xl mb-1">${card.icon}</span>
+                            <span class="text-xs sm:text-sm font-extrabold text-slate-800 tracking-tight leading-tight px-1">${card.name}</span>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(cardEl);
+            });
+        }
+
+        function startTimer() {
+            if (!timerInterval) {
+                timerInterval = setInterval(() => {
+                    timerSeconds++;
+                    const mins = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+                    const secs = String(timerSeconds % 60).padStart(2, '0');
+                    document.getElementById('timerDisplay').innerText = `${mins}:${secs}`;
+                }, 1000);
+            }
+        }
+
+        function handleCardClick(index) {
+            if (isProcessing) return;
+
+            const cardNode = document.getElementById(`card-${index}`);
+
+            // Ignore if already flipped or matched
+            if (cardNode.classList.contains('flipped') || cardNode.classList.contains('matched')) {
+                return;
+            }
+
+            // Start Timer on first interaction
+            startTimer();
+
+            // Flip Card
+            playSound('flip');
+            cardNode.classList.add('flipped');
+            flippedCards.push({ index, data: cards[index] });
+
+            // Increment Flips
+            flipCount++;
+            document.getElementById('flipsDisplay').innerText = flipCount;
+
+            // Check match if 2 cards turned
+            if (flippedCards.length === 2) {
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            isProcessing = true;
+            const [first, second] = flippedCards;
+
+            if (first.data.id === second.data.id) {
+                // MATCHED!
+                setTimeout(() => {
+                    playSound('match');
+                    document.getElementById(`card-${first.index}`).classList.add('matched');
+                    document.getElementById(`card-${second.index}`).classList.add('matched');
+
+                    matchedPairs++;
+                    document.getElementById('pairsDisplay').innerText = `${matchedPairs}/${totalPairs}`;
+
+                    flippedCards = [];
+                    isProcessing = false;
+
+                    // Victory Check
+                    if (matchedPairs === totalPairs) {
+                        handleVictory();
+                    }
+                }, 400);
+            } else {
+                // MISMATCH
+                setTimeout(() => {
+                    playSound('mismatch');
+                    document.getElementById(`card-${first.index}`).classList.remove('flipped');
+                    document.getElementById(`card-${second.index}`).classList.remove('flipped');
+
+                    flippedCards = [];
+                    isProcessing = false;
+                }, 900);
+            }
+        }
+
+        function handleVictory() {
+            clearInterval(timerInterval);
+            playSound('victory');
+
+            setTimeout(() => {
+                triggerConfetti();
+
+                // Format Time Display
+                const mins = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+                const secs = String(timerSeconds % 60).padStart(2, '0');
+
+                let levelText = "ง่าย";
+                if (currentLevel === 2) levelText = "ปานกลาง";
+                if (currentLevel === 3) levelText = "ท้าทาย";
+
+                document.getElementById('finalLevel').innerText = levelText;
+                document.getElementById('finalFlips').innerText = `${flipCount} ครั้ง`;
+                document.getElementById('finalTime').innerText = `${mins}:${secs}`;
+
+                // Calculate Star Rating
+                let stars = "⭐⭐⭐";
+                const optimalFlips = totalPairs * 2.5;
+                if (flipCount > optimalFlips + 6) stars = "⭐⭐";
+                if (flipCount > optimalFlips + 14) stars = "⭐";
+                document.getElementById('starRating').innerText = stars;
+
+                document.getElementById('victoryModal').classList.remove('hidden');
+            }, 500);
+        }
+
+        function closeVictoryModal() {
+            document.getElementById('victoryModal').classList.add('hidden');
+        }
+
+        // 🎆 Particle Confetti Animation Effect
+        function triggerConfetti() {
+            const canvas = document.getElementById('confettiCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+            const colors = ['#38bdf8', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
+
+            for (let i = 0; i < 80; i++) {
+                particles.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.7) * 12,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    size: Math.random() * 8 + 4,
+                    rotation: Math.random() * 360,
+                    rotSpeed: (Math.random() - 0.5) * 10
+                });
+            }
+
+            let animationFrame;
+            const startTime = Date.now();
+
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.25; // gravity
+                    p.rotation += p.rotSpeed;
+
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate((p.rotation * Math.PI) / 180);
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                    ctx.restore();
+                });
+
+                if (Date.now() - startTime < 2500) {
+                    animationFrame = requestAnimationFrame(animate);
+                } else {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    cancelAnimationFrame(animationFrame);
+                }
+            }
+
+            animate();
+        }
+    </script>
+</body>
+</html>
